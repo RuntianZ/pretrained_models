@@ -4,63 +4,58 @@ from __future__ import print_function
 
 import os
 from six.moves import urllib
+import tempfile
 
 
-def download(directory, filename, source_url):
-  filepath = os.path.join(directory, filename)
-  if os.path.isfile(filepath):
-    return filepath
-  if not os.path.isdir(directory):
-    os.makedirs(directory)
-  url = source_url.format(filename)
-  print('Downloading %s to %s' % (url, filepath))
-  urllib.request.urlretrieve(url, filepath)
-  return filepath
+def download(url, localpath):
+  """Download (and unzip) a file from the MNIST dataset if not already done."""
+  if not os.path.isdir(os.path.dirname(os.path.abspath(localpath))):
+    os.makedirs(os.path.dirname(os.path.abspath(localpath)))
+  print('Downloading %s to %s' % (url, localpath))
+  urllib.request.urlretrieve(url, localpath)
 
 
-def merge(fromdir, todir, filename):
-  if not os.path.exists(todir):
-    os.makedirs(todir)
-  else:
-    for fname in os.listdir(todir):
-      os.remove(os.path.join(todir, fname))
-
-  tofile = os.path.join(todir, filename)
+def merge_file(fromfile, tofile):
+  if not os.path.isdir(os.path.dirname(os.path.abspath(tofile))):
+    os.makedirs(os.path.dirname(os.path.abspath(tofile)))
   partnum = 1
   with open(tofile, 'wb') as fout:
-
     while True:
-      fname = os.path.join(fromdir, ('{}.part{}'.format(filename, partnum)))
+      fname = '{}.part{}'.format(fromfile, partnum)
       if not os.path.exists(fname):
         break
-
       with open(fname, 'rb') as fin:
         chunk = fin.read()
         fout.write(chunk)
       partnum += 1
     partnum -= 1
-
   return partnum
 
 
-def split(fromdir, todir, filename, chunksize=20000000):
-  if not os.path.exists(todir):
-    os.mkdir(todir)
+def download_and_merge(url, localpath, part_num):
+  tmp = tempfile.TemporaryDirectory()
+  if part_num == 0:
+    download(url, localpath)
   else:
-    for fname in os.listdir(todir):
-      os.remove(os.path.join(todir, fname))
+    for i in range(part_num):
+      file_url = '{}.part{}'.format(url, i + 1)
+      local_pth = '{}/tmp.part{}'.format(tmp.name, i + 1)
+      download(file_url, local_pth)
+    merge_file('{}/tmp'.format(tmp.name), localpath)
 
-  fromfile = os.path.join(fromdir, filename)
+
+def split(fromfile, tofile, chunksize=20000000):
+  todir = os.path.dirname(os.path.abspath(tofile))
+  if not os.path.isdir(todir):
+    os.makedirs(todir)
   partnum = 0
   with open(fromfile, 'rb') as fin:
     while True:
       chunk = fin.read(chunksize)
       if not chunk:
         break
-
       partnum += 1
-      fname = os.path.join(todir, ('{}.part{}'.format(filename, partnum)))
+      fname = '{}.part{}'.format(tofile, partnum)
       with open(fname, 'wb') as fout:
         fout.write(chunk)
-
   return partnum
